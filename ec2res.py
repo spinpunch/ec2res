@@ -20,6 +20,17 @@ import boto3
 
 time_now = int(time.time())
 
+class NoColor:
+    """ For notcolorizing the terminal output """
+    @classmethod
+    def bold(self, x): return x
+    @classmethod
+    def red(self, x): return x
+    @classmethod
+    def green(self, x): return x
+    @classmethod
+    def yellow(self, x): return x
+
 class ANSIColor:
     """ For colorizing the terminal output """
     BOLD = '\033[1m'
@@ -65,7 +76,8 @@ def ec2_inst_is_vpc(inst):
 
 def ec2_res_is_vpc(res):
     """ Is this EC2 reservation for a VPC instance? """
-    return ('VPC' in res['ProductDescription'])
+    # note: As of March, 2022, AWS has made all reservations VPC reservations
+    return True # ('VPC' in res['ProductDescription'])
 
 def ec2_res_match(res, inst):
     """ Return true if this EC2 reservation can cover this EC2 instance. """
@@ -190,12 +202,16 @@ def get_rds_res_offerings(rds):
     return ret
 
 if __name__ == '__main__':
-    opts, args = getopt.gnu_getopt(sys.argv[1:], 'v', ['region='])
+    opts, args = getopt.gnu_getopt(sys.argv[1:], 'v', ['region=','color='])
     verbose = False
     region = 'us-east-1'
+    use_color = True
     for key, val in opts:
         if key == '-v': verbose = True
         elif key == '--region': region = val
+        elif key == '--color' and val == 'no': use_color = False
+
+    colors = ANSIColor if use_color else NoColor
 
     conn = boto.ec2.connect_to_region(region)
     conn3 = boto3.client('ec2', region_name = region)
@@ -270,11 +286,11 @@ if __name__ == '__main__':
         res = ec2_res_coverage[inst.id]
         if res:
             my_index = ec2_res_usage[res['ReservedInstancesId']].index(inst)
-            print ANSIColor.green(pretty_print_ec2_instance(inst)+' '+pretty_print_ec2_res(res, my_index = my_index)), pretty_print_ec2_res_id(res),
+            print colors.green(pretty_print_ec2_instance(inst)+' '+pretty_print_ec2_res(res, my_index = my_index)), pretty_print_ec2_res_id(res),
         else:
-            print ANSIColor.red(pretty_print_ec2_instance(inst)+' NOT COVERED'),
+            print colors.red(pretty_print_ec2_instance(inst)+' NOT COVERED'),
         if inst.id in ec2_instance_status:
-            print ANSIColor.yellow('EVENTS! '+','.join(ec2_instance_status[inst.id])),
+            print colors.yellow('EVENTS! '+','.join(ec2_instance_status[inst.id])),
         print
 
     ec2_any_unused = False
@@ -285,7 +301,7 @@ if __name__ == '__main__':
         if not ec2_any_unused:
             print
             ec2_any_unused = True
-        print ANSIColor.red(pretty_print_ec2_res(res, override_count = res['InstanceCount'] - use_count)), pretty_print_ec2_res_id(res)
+        print colors.red(pretty_print_ec2_res(res, override_count = res['InstanceCount'] - use_count)), pretty_print_ec2_res_id(res)
     if not ec2_any_unused:
         print '(none)'
 
@@ -294,9 +310,9 @@ if __name__ == '__main__':
         res = rds_res_coverage[inst['DBInstanceIdentifier']]
         if res:
             my_index = rds_res_usage[res['ReservedDBInstanceId']].index(inst)
-            print ANSIColor.green(pretty_print_rds_instance(inst)+' '+pretty_print_rds_res(res, rds_res_offerings, my_index = my_index)),
+            print colors.green(pretty_print_rds_instance(inst)+' '+pretty_print_rds_res(res, rds_res_offerings, my_index = my_index)),
         else:
-            print ANSIColor.red(pretty_print_rds_instance(inst)+' NOT COVERED'),
+            print colors.red(pretty_print_rds_instance(inst)+' NOT COVERED'),
         print
 
     rds_any_unused = False
@@ -307,6 +323,6 @@ if __name__ == '__main__':
         if not rds_any_unused:
             print
             rds_any_unused = True
-        print ANSIColor.red(pretty_print_rds_res(res, rds_res_offerings, override_count = res['DBInstanceCount'] - use_count)), res['ReservedDBInstanceId']
+        print colors.red(pretty_print_rds_res(res, rds_res_offerings, override_count = res['DBInstanceCount'] - use_count)), res['ReservedDBInstanceId']
     if not rds_any_unused:
         print '(none)'
